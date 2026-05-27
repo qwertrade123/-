@@ -2,7 +2,7 @@
 """
 程式交易回測 Streamlit APP
 策略：(一)移動平均 (二)RSI順勢 (三)RSI逆勢 (四)布林通道 (五)MACD (六)KDJ (七)自定義
-功能：K棒圖、策略回測、參數最佳化（Sharpe+Calmar）、AI 績效評估
+功能：K棒圖、策略回測、參數最佳化（Sharpe+Calmar）
 """
 
 import streamlit as st
@@ -255,13 +255,13 @@ def run_MACD(kd, fast=12, slow=26, signal=9, stop_loss=30.0, order_qty=1):
             if kd2['product'][n+1] != kd2['product'][n]:
                 rec.Cover('Sell', kd2['product'][n], kd2['time'][n], kd2['close'][n], rec.GetOpenInterest()); continue
             sl = max(sl, kd2['close'][n] - stop_loss)
-            if kd2['close'][n] < sl or death:      # 移動停損 或 死亡交叉出場
+            if kd2['close'][n] < sl or death:
                 _cover_all_long(rec, kd2, n)
         elif oi < 0:
             if kd2['product'][n+1] != kd2['product'][n]:
                 rec.Cover('Buy', kd2['product'][n], kd2['time'][n], kd2['close'][n], -rec.GetOpenInterest()); continue
             sl = min(sl, kd2['close'][n] + stop_loss)
-            if kd2['close'][n] > sl or golden:     # 移動停損 或 黃金交叉出場
+            if kd2['close'][n] > sl or golden:
                 _cover_all_short(rec, kd2, n)
     return rec
 
@@ -290,9 +290,7 @@ def run_KDJ(kd, fastk=5, slowk=3, slowd=3, oversold=20, overbought=80, stop_loss
         if np.isnan(kd2['slowk'][n-1]) or np.isnan(kd2['slowd'][n-1]):
             continue
         oi = rec.GetOpenInterest()
-        # K 上穿 D（黃金交叉）
         k_cross_up   = kd2['slowk'][n-1] <= kd2['slowd'][n-1] and kd2['slowk'][n] > kd2['slowd'][n]
-        # K 下穿 D（死亡交叉）
         k_cross_down = kd2['slowk'][n-1] >= kd2['slowd'][n-1] and kd2['slowk'][n] < kd2['slowd'][n]
 
         if oi == 0:
@@ -306,13 +304,13 @@ def run_KDJ(kd, fastk=5, slowk=3, slowd=3, oversold=20, overbought=80, stop_loss
             if kd2['product'][n+1] != kd2['product'][n]:
                 rec.Cover('Sell', kd2['product'][n], kd2['time'][n], kd2['close'][n], rec.GetOpenInterest()); continue
             sl = max(sl, kd2['close'][n] - stop_loss)
-            if kd2['close'][n] < sl or k_cross_down:  # 移動停損 或 死亡交叉出場
+            if kd2['close'][n] < sl or k_cross_down:
                 _cover_all_long(rec, kd2, n)
         elif oi < 0:
             if kd2['product'][n+1] != kd2['product'][n]:
                 rec.Cover('Buy', kd2['product'][n], kd2['time'][n], kd2['close'][n], -rec.GetOpenInterest()); continue
             sl = min(sl, kd2['close'][n] + stop_loss)
-            if kd2['close'][n] > sl or k_cross_up:    # 移動停損 或 黃金交叉出場
+            if kd2['close'][n] > sl or k_cross_up:
                 _cover_all_short(rec, kd2, n)
     return rec
 
@@ -464,44 +462,6 @@ def grid_search(run_func, kd: dict, param_grid: dict, alpha: float = 0.5):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# AI 評估（Claude API）
-# ─────────────────────────────────────────────────────────────────────────────
-def ai_evaluate(api_key: str, summary_text: str) -> str:
-    import anthropic
-    client = anthropic.Anthropic(api_key=api_key)
-    prompt = f"""你是一位專業的量化交易分析師。以下是多種程式交易策略的回測績效數據，請進行詳細分析與比較：
-
-{summary_text}
-
-請用繁體中文，從以下六個角度提供分析報告：
-
-## 1. 各策略綜合排名
-（同時考慮報酬、勝率、Sharpe Ratio、Calmar Ratio 等指標）
-
-## 2. 各策略優缺點
-（分別說明每個策略的強項和弱點）
-
-## 3. 風險控管分析
-（解讀 MDD、Sharpe Ratio、Calmar Ratio 的意義，哪個策略風險最低？）
-
-## 4. 市場環境適用性
-（哪個策略適合趨勢市場？哪個適合震盪市場？）
-
-## 5. 改進建議
-（如何調整參數或組合多個策略？）
-
-## 6. 最終推薦
-（根據本資料集的特性，推薦哪個策略或策略組合，並說明理由）"""
-
-    msg = client.messages.create(
-        model="claude-opus-4-7",
-        max_tokens=2500,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return msg.content[0].text
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Streamlit 主介面
 # ─────────────────────────────────────────────────────────────────────────────
 st.set_page_config(page_title="程式交易回測系統", page_icon="📈", layout="wide")
@@ -550,11 +510,6 @@ with st.sidebar:
     kbar_cycle = st.number_input("K棒週期 (分鐘)",
                                   min_value=1, max_value=10080, value=2880, step=1,
                                   help="2880 = 2天 ｜ 1440 = 1天 ｜ 60 = 1小時")
-    st.divider()
-    st.header("🤖 AI 評估")
-    api_key = st.text_input("Anthropic API Key", type="password",
-                             placeholder="sk-ant-...",
-                             help="輸入後才能使用「AI 評估」分頁")
 
 # ── 資料前處理 ───────────────────────────────────────────────────────────────
 kd = None
@@ -573,7 +528,7 @@ if kd is None:
     st.stop()
 
 # ── 分頁 ─────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4 = st.tabs(["📊 K棒圖", "📈 策略回測", "🔧 參數最佳化", "🤖 AI 評估"])
+tab1, tab2, tab3 = st.tabs(["📊 K棒圖", "📈 策略回測", "🔧 參數最佳化"])
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -773,60 +728,3 @@ with tab3:
                     use_container_width=True)
             else:
                 st.warning("沒有找到有效組合，請擴大參數範圍")
-
-
-# ══════════════════════════════════════════════════════════════════
-# Tab 4 — AI 評估
-# ══════════════════════════════════════════════════════════════════
-with tab4:
-    st.subheader("🤖 生成式 AI 策略評估報告")
-    st.write("使用 **Claude** 自動分析並比較各策略績效，生成專業量化分析報告。")
-
-    if not api_key:
-        st.warning("⚠️ 請先在左側側邊欄輸入 Anthropic API Key")
-        st.stop()
-
-    selected_strats = st.multiselect(
-        "選擇要評估的策略（可多選）",
-        list(STRATEGIES.keys()),
-        default=list(STRATEGIES.keys()))
-
-    if st.button("🤖 生成 AI 評估報告", type="primary", key="run_ai"):
-        if not selected_strats:
-            st.error("請至少選擇一個策略")
-        else:
-            with st.spinner("回測所有策略並生成 AI 分析報告（約需 30 秒）..."):
-                # 收集各策略預設參數的回測結果
-                summary_lines = []
-                cols = st.columns(len(selected_strats))
-                for i, sname in enumerate(selected_strats):
-                    try:
-                        rec = STRATEGIES[sname](kd)
-                        profits = rec.GetProfit()
-                        n = rec.GetTotalNumber()
-                        sharpe = float(np.mean(profits) / (np.std(profits) + 1e-10)) if n > 1 else 0
-                        calmar = float(rec.GetTotalProfit() / (rec.GetMDD() + 1e-10)) if rec.GetMDD() > 0 else 0
-                        line = (f"【{sname}】"
-                                f"淨利={rec.GetTotalProfit():.2f}點, "
-                                f"交易次數={n}, "
-                                f"勝率={rec.GetWinRate():.1%}, "
-                                f"平均損益={rec.GetAverageProfit():.2f}, "
-                                f"MDD={rec.GetMDD():.2f}, "
-                                f"Sharpe={sharpe:.3f}, "
-                                f"Calmar={calmar:.3f}")
-                        summary_lines.append(line)
-                        cols[i].metric(sname.split(')')[0]+')', f"{rec.GetTotalProfit():.1f}")
-                    except Exception as e:
-                        summary_lines.append(f"【{sname}】計算失敗：{e}")
-
-                summary_text = "\n".join(summary_lines)
-
-                st.subheader("各策略績效摘要")
-                st.code(summary_text, language=None)
-
-                try:
-                    report = ai_evaluate(api_key, summary_text)
-                    st.subheader("AI 分析報告")
-                    st.markdown(report)
-                except Exception as e:
-                    st.error(f"AI 評估失敗：{e}\n\n請確認 API Key 是否正確。")
